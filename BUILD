@@ -7,3 +7,13 @@ cc_binary(
         "hello_opencv_cuda.cpp"
     ]
 )
+
+cc_binary(
+    name = "camera_calibration",
+    deps = [
+        "@opencv//:opencv"
+    ],
+    srcs = [
+        "camera_calibration.cpp"
+    ]
+)
