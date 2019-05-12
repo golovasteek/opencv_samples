@@ -9,3 +9,9 @@ new_local_repository(
     path="/usr/local/cuda-10.1",
     build_file="cuda.BUILD"
 )
+
+new_local_repository(
+    name="egl",
+    path="/usr/",
+    build_file="egl.BUILD"
+)
