@@ -5,6 +5,8 @@ cc_binary(
         "@egl//:egl"
     ],
     srcs = [
-        "egl_consumer.cpp"
+        "egl_consumer.cpp",
+        "egl_common.h",
+        "egl_common.cpp"
     ]
 )

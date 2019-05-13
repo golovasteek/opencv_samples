@@ -6,7 +6,7 @@ new_local_repository(
 
 new_local_repository(
     name="cuda",
-    path="/usr/local/cuda-10.1",
+    path="/usr/",
     build_file="cuda.BUILD"
 )
 
