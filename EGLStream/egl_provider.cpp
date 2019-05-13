@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
     cuCtxCreate(&cuContext, 0, device);
 
     CUeglStreamConnection eglCudaConnection;
-    cudaResult = cuEGLStreamProducerConnect(&eglCudaConnection, eglStream.get(), 1920, 1200);
+    cudaResult = cuEGLStreamConsumerConnect(&eglCudaConnection, eglStream.get());
     if (cudaResult != CUDA_SUCCESS) {
         const char* error;
         cuGetErrorString(cudaResult, &error);
@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    cudaResult = cuEGLStreamProducerDisconnect(&eglCudaConnection);
+    cudaResult = cuEGLStreamConsumerDisconnect(&eglCudaConnection);
     if (cudaResult != CUDA_SUCCESS) {
         std::cout << "Can not disconnect consumer from eglStream" << std::endl;
         return -1;
