@@ -3,6 +3,12 @@
 #include <stdexcept>
 #include <iostream>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <unordered_map>
+
 namespace egl {
 
 template<class FunctionType>
@@ -15,15 +21,44 @@ FunctionType getExtFunction(const std::string& name)
     return result;
 }
 
+const std::unordered_map<EGLint, std::string> EGL_ERROR_STRINGS = {
+    { EGL_SUCCESS, "The last function succeeded without error." },
+    { EGL_NOT_INITIALIZED, "EGL is not initialized, or could not be initialized, for the specified EGL display connection." },
+    { EGL_BAD_ACCESS, "EGL cannot access a requested resource (for example a context is bound in another thread)." },
+    { EGL_BAD_ALLOC, "EGL failed to allocate resources for the requested operation." },
+    { EGL_BAD_ATTRIBUTE,  "An unrecognized attribute or attribute value was passed in the attribute list." },
+    { EGL_BAD_CONTEXT, "An EGLContext argument does not name a valid EGL rendering context." },
+    { EGL_BAD_CONFIG, "An EGLConfig argument does not name a valid EGL frame buffer configuration." },
+    { EGL_BAD_CURRENT_SURFACE, "The current surface of the calling thread is a window, pixel buffer or pixmap that is no longer valid." },
+    { EGL_BAD_DISPLAY, "An EGLDisplay argument does not name a valid EGL display connection." },
+    { EGL_BAD_SURFACE, "An EGLSurface argument does not name a valid surface (window, pixel buffer or pixmap) configured for GL rendering." },
+    { EGL_BAD_MATCH, "Arguments are inconsistent (for example, a valid context requires buffers not supplied by a valid surface)." },
+    { EGL_BAD_PARAMETER, "One or more argument values are invalid." },
+    { EGL_BAD_NATIVE_PIXMAP, "A NativePixmapType argument does not refer to a valid native pixmap." },
+    { EGL_BAD_NATIVE_WINDOW, "A NativeWindowType argument does not refer to a valid native window." },
+    { EGL_CONTEXT_LOST, "A power management event has occurred. The application must destroy all contexts and reinitialise OpenGL ES state and objects to continue rendering." }
+};
+
 #define INIT_EXT_FUNCTION(name) \
     name(getExtFunction<name ## _type>(#name))
+
+
+#define EGL_CHECK_CALL(expr) \
+    [&]() { \
+        auto result = (expr); \
+        if (result == 0) { \
+            EGLint error = eglGetError(); \
+            throw Error(EGL_ERROR_STRINGS.at(error)); \
+        } \
+        return result;\
+    }()
 
 
 Framework::Framework()
     : INIT_EXT_FUNCTION(eglCreateStreamKHR)
     , INIT_EXT_FUNCTION(eglDestroyStreamKHR)
+    , INIT_EXT_FUNCTION(eglQueryStreamKHR)
 {
-
 }
 
 Display::Display()
@@ -53,20 +88,43 @@ Display::~Display()
     std::cerr << "EGL Termindated" << std::endl;
 }
 
-Stream::Stream(const Framework& framework, const Display& d)
+
+Socket::Socket(const std::string& socketName)
+{
+    fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd_ == -1) {
+        throw Error("Can not create socket");
+    }
+
+    sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, socketName.data());
+
+    bind(fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+}
+
+Socket::~Socket()
+{
+    close(fd_);
+}
+
+Stream::Stream(const std::string& socketPath, Endpoint endpoint, const Framework& framework, const Display& d)
     : framework_(framework)
     , display_(d)
+    , socket_(socketPath)
 {
     EGLint streamAttributeList[] = {
         EGL_SUPPORT_REUSE_NV, EGL_FALSE,
         EGL_CONSUMER_LATENCY_USEC_KHR, 16000,
         EGL_CONSUMER_ACQUIRE_TIMEOUT_USEC_KHR, 16000,
+        EGL_STREAM_TYPE_NV, EGL_STREAM_CROSS_PROCESS_NV,
+        EGL_STREAM_ENDPOINT_NV, static_cast<EGLint>(endpoint),
+        EGL_STREAM_PROTOCOL_NV, EGL_STREAM_PROTOCOL_SOCKET_NV,
+        EGL_SOCKET_TYPE_NV, EGL_SOCKET_TYPE_UNIX_NV,
+        EGL_SOCKET_HANDLE_NV, socket_.get(),
         EGL_NONE };
-    stream_ = framework_.eglCreateStreamKHR(d.get(), streamAttributeList);
-
-    if (stream_ == EGL_NO_STREAM_KHR) {
-        throw Error("Can not create stream");
-    }
+    stream_ = EGL_CHECK_CALL(framework_.eglCreateStreamKHR(d.get(), streamAttributeList));
 }
 
 Stream::~Stream()
@@ -77,6 +135,18 @@ Stream::~Stream()
     } else {
         std::cerr << "Stream is destroyed" << std::endl;
     }
+}
+
+EGLint Stream::queryState()
+{
+    EGLint result = 0;
+    auto status = framework_.eglQueryStreamKHR(display_.get(), stream_, EGL_STREAM_STATE_KHR, &result);
+
+    if (!status) {
+        EGLint error = eglGetError();
+        std::cerr << "Query stream failed: 0x" << std::hex << error << std::endl;
+    }
+    return result;
 }
 
 }
