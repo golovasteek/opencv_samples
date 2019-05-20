@@ -4,6 +4,11 @@
 
 #include <stdexcept>
 
+#define CHECK(expr) \
+    if (!(expr)) { \
+        throw egl::Error(#expr " is false"); \
+    } \
+
 namespace egl {
 
 typedef EGLStreamKHR (*eglCreateStreamKHR_type)(
@@ -45,7 +50,7 @@ private:
 
 class Socket {
 public:
-    Socket(const std::string& socketPath);
+    Socket(const std::string& socketPath, bool isServer);
     ~Socket();
 
     int get() const { return fd_; };

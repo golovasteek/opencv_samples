@@ -89,9 +89,9 @@ Display::~Display()
 }
 
 
-Socket::Socket(const std::string& socketName)
+Socket::Socket(const std::string& socketName, bool isServer)
 {
-    fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
+    fd_ = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (fd_ == -1) {
         throw Error("Can not create socket");
     }
@@ -101,7 +101,47 @@ Socket::Socket(const std::string& socketName)
     addr.sun_family = AF_UNIX;
     strcpy(addr.sun_path, socketName.data());
 
-    bind(fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    if (isServer) {
+        unlink(socketName.c_str());
+        auto status = bind(fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        if (status == -1) {
+            throw Error(std::string("Can not bind: ") + sys_errlist[errno]);
+        }
+        
+        status = listen(fd_, 5);
+        if (status == -1) {
+            throw Error("Can not listen");
+        }
+
+        sockaddr clientAddr;
+        socklen_t clientAddrLen;
+        std::cerr << "Waiting for connections..." << std::endl;
+        auto msgSocket = accept(fd_, &clientAddr, &clientAddrLen);
+        if (msgSocket == -1) {
+            throw Error("Can not accept connection");
+        }
+
+        std::cerr << "Connected." << std::endl;
+        char msg[16];
+        auto readCount = read(msgSocket, msg, 16);
+        if (readCount == -1) {
+            throw Error("Can not establish connection");
+        }
+        std::cerr << "Got socket message" << std::endl;
+        close(fd_);
+        fd_ = msgSocket;
+    } else {  // not server
+        auto status = connect(fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        if (status == -1) {
+            throw Error(std::string("Can not connect: ") + sys_errlist[errno]);
+        }
+        char data[] = "Hello, egl stream!";
+        status = write(fd_, data, sizeof(data));
+        if (status == -1) {
+            throw Error(std::string("Can not write to socket: ") + sys_errlist[errno]);
+        } 
+    }
+    std::cerr << "Socket connected" << std::endl;
 }
 
 Socket::~Socket()
@@ -112,7 +152,7 @@ Socket::~Socket()
 Stream::Stream(const std::string& socketPath, Endpoint endpoint, const Framework& framework, const Display& d)
     : framework_(framework)
     , display_(d)
-    , socket_(socketPath)
+    , socket_(socketPath, endpoint == Endpoint::consumer)
 {
     EGLint streamAttributeList[] = {
         EGL_SUPPORT_REUSE_NV, EGL_FALSE,

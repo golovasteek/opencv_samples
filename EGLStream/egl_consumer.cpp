@@ -5,6 +5,9 @@
 #include <chrono>
 
 #include "egl_common.h"
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 
 using namespace std::chrono_literals;
 
@@ -17,8 +20,8 @@ int main(int argc, char** argv) {
 
     EGLint streamState = 0;
     do {
-        EGLint streamState = eglStream.queryState();
-        std::cout << std::hex << "Stream state: " << streamState << std::endl;
+        streamState = eglStream.queryState();
+        std::cout << std::hex << "Waiting producer to connect. Stream state: " << streamState << std::endl;
         std::this_thread::sleep_for(30ms);
     } while(streamState == EGL_STREAM_STATE_INITIALIZING_NV);
 
@@ -54,10 +57,15 @@ int main(int argc, char** argv) {
     }
 
     do {
-        EGLint streamState = eglStream.queryState();
-        std::cout << std::hex << "Stream state: " << streamState << std::endl;
+        streamState = eglStream.queryState();
+        std::cout << std::hex << "Waiting for frames. Stream state: " << streamState << std::endl;
         std::this_thread::sleep_for(30ms);
-    } while(streamState != EGL_STREAM_STATE_NEW_FRAME_AVAILABLE_KHR);
+    } while(streamState != EGL_STREAM_STATE_NEW_FRAME_AVAILABLE_KHR && streamState != EGL_STREAM_STATE_DISCONNECTED_KHR);
+
+    if (streamState == EGL_STREAM_STATE_DISCONNECTED_KHR) {
+        std::cout << "Stream disconnected" << std::endl;
+        return 0;
+    }
 
     CUgraphicsResource cudaResource;
     cudaResult = cuEGLStreamConsumerAcquireFrame(&eglCudaConnection, &cudaResource, NULL, 16000);
@@ -67,6 +75,34 @@ int main(int argc, char** argv) {
         std::cout << "Can not acquire cuda frame: " << error << std::endl;
         return -1;
     }
+    std::cout << "Frame acquired" << std::endl;
+
+    CUeglFrame eglFrame;
+    cudaResult = cuGraphicsResourceGetMappedEglFrame(&eglFrame, cudaResource, 0, 0);
+    if (cudaResult != CUDA_SUCCESS) {
+        const char* error;
+        cuGetErrorString(cudaResult, &error);
+        std::cout << "Can not get EGL frame from resource: " << error << std::endl;
+        return -1;
+    }
+
+    cv::Mat cpuMat;
+
+    {
+        cv::cuda::GpuMat frameWrapper(eglFrame.height, eglFrame.width, CV_8UC3, eglFrame.frame.pPitch[0], eglFrame.pitch);
+        frameWrapper.download(cpuMat);
+        cv::imshow("Camera frame", cpuMat);
+    }
+
+    cudaResult = cuEGLStreamConsumerReleaseFrame(&eglCudaConnection, cudaResource, nullptr);
+    if (cudaResult != CUDA_SUCCESS) {
+        const char* error;
+        cuGetErrorString(cudaResult, &error);
+        std::cout << "Can not release frame: " << error << std::endl;
+        return -1;
+    }
+
+    cv::waitKey(0);
 
     cudaResult = cuEGLStreamConsumerDisconnect(&eglCudaConnection);
     if (cudaResult != CUDA_SUCCESS) {

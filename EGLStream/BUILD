@@ -2,7 +2,8 @@ cc_binary(
     name = "egl_consumer",
     deps = [
         "@cuda//:cuda",
-        "@egl//:egl"
+        "@egl//:egl",
+        "@opencv//:opencv"
     ],
     srcs = [
         "egl_consumer.cpp",
@@ -15,7 +16,8 @@ cc_binary(
     name = "egl_producer",
     deps = [
         "@cuda//:cuda",
-        "@egl//:egl"
+        "@egl//:egl",
+        "@opencv//:opencv"
     ],
     srcs = [
         "egl_producer.cpp",
