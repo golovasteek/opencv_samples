@@ -118,14 +118,14 @@ Socket::Socket(const std::string& socketName, bool isServer)
         std::cerr << "Waiting for connections..." << std::endl;
         auto msgSocket = accept(fd_, &clientAddr, &clientAddrLen);
         if (msgSocket == -1) {
-            throw Error("Can not accept connection");
+            throw Error("Can not accept connection" + std::string(sys_errlist[errno]));
         }
 
         std::cerr << "Connected." << std::endl;
         char msg[16];
         auto readCount = read(msgSocket, msg, 16);
         if (readCount == -1) {
-            throw Error("Can not establish connection");
+            throw Error(std::string("Can not establish connection") + sys_errlist[errno]);
         }
         std::cerr << "Got socket message" << std::endl;
         close(fd_);
@@ -157,7 +157,7 @@ Stream::Stream(const std::string& socketPath, Endpoint endpoint, const Framework
     EGLint streamAttributeList[] = {
         EGL_SUPPORT_REUSE_NV, EGL_FALSE,
         EGL_CONSUMER_LATENCY_USEC_KHR, 16000,
-        EGL_CONSUMER_ACQUIRE_TIMEOUT_USEC_KHR, 16000,
+        EGL_CONSUMER_ACQUIRE_TIMEOUT_USEC_KHR, 64000,
         EGL_STREAM_TYPE_NV, EGL_STREAM_CROSS_PROCESS_NV,
         EGL_STREAM_ENDPOINT_NV, static_cast<EGLint>(endpoint),
         EGL_STREAM_PROTOCOL_NV, EGL_STREAM_PROTOCOL_SOCKET_NV,
