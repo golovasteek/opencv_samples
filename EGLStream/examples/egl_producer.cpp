@@ -2,7 +2,7 @@
 #include <cudaEGL.h>
 #include <iostream>
 
-#include "egl_common.h"
+#include "EGLStream/egl_common.h"
 #include <thread>
 #include <chrono>
 #include <opencv2/videoio.hpp>

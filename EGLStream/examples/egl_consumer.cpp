@@ -4,7 +4,7 @@
 #include <thread>
 #include <chrono>
 
-#include "egl_common.h"
+#include "EGLStream/egl_common.h"
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
